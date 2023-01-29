@@ -13,14 +13,18 @@ df = df |> group_by(
 
 df = df |>  bind_cols(index = 1:nrow(df))
 
-df[67, 2] = 2.7
+#df[67, 2] = 2.7
 df |>
   ggplot(aes(x = Time_submitted, y = rate)) +
   geom_line()
 
 
 
-y = df$rate
+y = df$rate / 5
+
+library(lubridate)
+
+y <- ts(y, start = decimal_date(as.Date("2022-01-01")), frequency = 365)
 
 
 acf(df$rate)
@@ -78,6 +82,20 @@ lines(t,rep(-3,n+12),lty=2,col=1)
 lines(t,rep(3,n+12),lty=2,col=1)
 lines(t,rep(-2,n+12),lty=3,col=1)
 lines(t,rep(2,n+12),lty=3,col=1)
+
+
+## BARMA
+
+
+source("scripts_barma/analise_barmax/barma.r")
+
+h1<-12 # numero de previsoes passos a frente
+
+# ajustando sem covariaveis
+fit = barma(y,ar=c(1),ma=c(1),h=h1,diag=1)
+
+
+fit$aic
 
 
 

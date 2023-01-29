@@ -38,10 +38,28 @@ scale_fill_discrete <- \(...) ggplot2::scale_fill_brewer(..., palette = "Set2")
 
 
 \section{Introdução}
+O Spotify é um serviço digital que dá acesso instantâneo a milhões de músicas, podcasts, vídeos e outros conteúdos de criadores no mundo todo. Pode ser acessado pelo *browser*, sendo possível também baixar o aplicativo, estando disponível para diversas plataformas digitais. 
+Nesse ensaio, vamos analisar os *reviews* feitos na Play Store sobre a versão para *Android*, dessa maneira vamos examinar o comportamento da média dos reviews (estrelas) diária em uma perspectiva de série temporal, uma outra abordagem utilizando técnicas de NLP pode ser consultada clicando-se [aqui](https://github.com/AlissonRP/SpotifyReviews/blob/main/report.pdf).
+
 ```{r }
 # R code
-iris |>
-  fastrep::describe()
+library(tidyverse)
+library(forecast)
+library(lubridate)
+
+df = read_csv("../data/rates.csv")
+
+df = df |>
+  mutate(Time_submitted  = as.Date(Time_submitted, format = "%Y-%m-%d"))
+
+df
+df = df |> group_by(
+  Time_submitted) |>
+  summarise(rate = mean(Rating))
+
+df = df |>  bind_cols(index = 1:nrow(df))
+y = df$rate
+y <- ts(y, start = decimal_date(as.Date("2022-01-01")), frequency = 365)
 ```
 ```{r crftable}
 
@@ -70,6 +88,42 @@ O modelo KARMA foi introduzido no contexto de séries temporais com o intuito de
 \begin{align}
 g(\mu_t)=\alpha+x_t^{T}\beta+\sum_{i=1}^{p}\varphi_i[g(y_{t-i})-x_{t-1}^{T}\beta]+\sum_{j=1}^{q}\theta_{j}r_{t-j}
 \end{align}
+
+
+\section{Análise Descritiva}
+
+```{r, fig.cap="Comportament Médio dos Reviews ao Longo do Tempo"}
+df |>
+  ggplot(aes(x = Time_submitted, y = rate)) +
+  geom_line()
+
+```
+```{r}
+pvalor = tseries::adf.test(y)$p.value
+```
+
+
+
+Para a modelagem deve-se verificar se a suposição de estacionariedade  é satisfeita, dessa forma, antes da escolha do modelo realizou-se o teste de raiz unitária de Dickey-Fuller Aumentado (ADF) (Said e Dickey, 1984). Sendo obtido p-valor= 0.06, ao nível de significância de  5%, a hipótese  de não  estacionariedade  é rejeitada. Assumindo que a série estacionária procedeu-se a utilização dos modelos descritos na seguinte  seção. 
+
+A Figura fornece a função de autocorrelação e autocorrelação 
+```{r}
+acf(df$rate) 
+
+```
+
+
+```{r}
+pacf(df$rate) 
+
+```
+Pode-se notar que por inspeção visual da figura, conclui-se que não existem evidências da série não ser estacionária, assim como visto pelo teste ADF.
+
+
+```{r}
+y |> tibble() |>  fastrep::describe()
+```
+
 
 \section{Ajuste dos Modelos}
 
