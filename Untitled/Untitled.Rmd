@@ -48,6 +48,20 @@ library(forecast)
 library(lubridate)
 library(patchwork)
 
+
+
+
+eqm = function(model, serie = y){
+  resid = serie[2:length(serie)] - model$fitted[2:length(serie)]
+  return(sum(resid^2) / (length(resid) - 1))
+  
+}
+
+mape = function(model,  serie = y){
+  resid = serie[2:length(serie)] - model$fitted[2:length(serie)]
+  return((1/length(serie)) * sum(abs(resid)/abs(y[2:length(y)])))
+}
+
 source("analise_barmax/barma.r")
 source("KARMA_BARMA/karma.r")
 
@@ -180,10 +194,10 @@ realizada a análise de diagnóstico na seguinte seção.
 
 
 Considerando as Figuras, pode-se observar que em apenas uma defasagem o
-valor é superior ao intervalo de confiança, dessa forma, aparentemente a suposição de resíduos não correlacionados  é satisfeita, ainda baseado no teste de Ljung-Box, testou-se correlação nula até a defasagem 120, tem-se p-valor=0.3568, logo os resíduos são não correlacionados. 
+valor é superior ao intervalo de confiança, dessa forma, aparentemente a suposição de resíduos não correlacionados  é satisfeita, ainda baseado no teste de Ljung-Box, testou-se correlação nula até a defasagem 120, tem-se p-valor=0.3568, logo os resíduos são não correlacionados. A Figura também apresenta os resíduos padronizados ao longo dos indíces, observa-se que apresentam um comportamento aleatório em torno de zero, com os valores dentro dos limites estipulados. Para o gráfico Q-Q plot, verifica-se que a maioria dos pontos se encontra sobre a linha diagonal, indicando a proximidade dos resíduos da distribuição Normal.
 
 
-```{r}
+```{r, fig.cap="Comportamento dos Resíduos para o Modelo Barma"}
 par(mfrow = c(2, 2)) 
 
 res=fit_barma$resid1
@@ -208,10 +222,40 @@ min_r<- min(res,na.rm=T)
 qqnorm(resi_padrao, pch = "+",
        xlim=c(0.95*min_r,max_r*1.05),
        ylim=c(0.95*min_r,max_r*1.05),
-       main="",xlab="quantis normais",ylab="quantis emp?ricos")
+       main="",xlab="quantis normais",ylab="quantis empiricos")
 lines(c(-10,10),c(-10,10),lty=2)
 ```
 
+Pela Figura, temos os mesmos gráficos porém para o modelo KARMA
+
+```{r, fig.cap="Comportamento dos Resíduos para o Modelo KARMA"}
+par(mfrow = c(2, 2)) 
+
+res=fit_karma$resid1
+resi_padrao=as.vector((res)/(sd(res)))
+acf(res)
+pacf(res)
+
+n<-length(res)
+t<-seq(-5,n+6,by=1)
+
+plot(res, main=" ",xlab="Índices",ylab="Resíduos", pch = "+",ylim=c(-4,4))
+lines(t,rep(-3,n+12),lty=2,col=1)
+lines(t,rep(3,n+12),lty=2,col=1)
+lines(t,rep(-2,n+12),lty=3,col=1)
+lines(t,rep(2,n+12),lty=3,col=1)
+
+
+
+
+max_r<- max(res,na.rm=T)
+min_r<- min(res,na.rm=T)
+qqnorm(resi_padrao, pch = "+",
+       xlim=c(0.95*min_r,max_r*1.05),
+       ylim=c(0.95*min_r,max_r*1.05),
+       main="",xlab="quantis normais",ylab="quantis empiricos")
+lines(c(-10,10),c(-10,10),lty=2)
+```
 
 
 
@@ -228,6 +272,64 @@ resid_plot = function(model , type = 2){
   residuals
   
 }
+
+
+```
+\subsection{Comparação dos Modelos}
+
+Para comparar os modelos vamos utilizar de duas medidas que avaliam a diferença entre os valores reais $y$ e os valores preditos pelo modelo $\hat{\mu}$ , sendo elas o erro quadrático médio (EQM) e o erro percentual absoluto médio (MAPE), sendo definidas:
+
+\begin{align}
+\text{EQM} = \dfrac{1}{h}\sum_{i=1}^{h}(y_i - \hat{\mu}_i)^2 \quad \text{MAPE} =  \dfrac{1}{h}\sum_{i=1}^{h}\dfrac{|y_i - \hat{\mu}_i|}{|y_i|}
+\end{align}
+
+```{r}
+modelo=auto.arima(y, max.p=5, max.q=5, max.P=5, max.Q=5, max.order=5, max.d=2, max.D=1,
+                  start.p=1, start.q=1, start.P=1, start.Q=1, stationary=F)
+metrics = data.frame(EQM = c(eqm(fit_barma), eqm(fit_karma), eqm(modelo)),
+           MAPE = c(mape(fit_barma), mape(fit_karma), mape(modelo)))
+row.names(metrics) = c("BARMA", "KARMA", "ARIMA")
+
+metrics |> fastrep::tbl("Medidas nos Período de Ajuste")
+
+```
+
+```{r}
+
+karma_pred = fit_karma$forecast
+
+barma_pred = fit_barma$forecast
+
+test = y[(length(y) - 14):length(y)]
+
+
+
+###################### EQM e MAPE período previsao #######################
+
+############### EQM #################
+residuos_beta_prev = (test- barma_pred)
+#residuos_sarima_prev = (test-as.vector(modelo$))
+residuos_arma_prev = (test-as.vector(karma_pred))
+
+eqm_beta_prev = (sum(residuos_beta_prev^2))/length(residuos_beta_prev)
+#(eqm_sarima_prev = (sum(residuos_sarima_prev^2))/length(residuos_sarima_prev))
+eqm_arma_prev = (sum(residuos_arma_prev^2))/length(residuos_arma_prev)
+
+############### MAPE #################
+
+maple_beta_prev = sum( abs(residuos_beta_prev)/abs(test) )/ length(residuos_beta_prev)
+#(maple_sarima_prev = sum( abs(residuos_sarima_prev)/abs(za) )/ length(residuos_sarima_prev))
+maple_ar_prev = sum( abs(residuos_arma_prev)/abs(test) )/ length(residuos_arma_prev)
+
+
+metrics = data.frame(EQM = c(eqm_beta_prev, eqm_arma_prev),
+           MAPE = c(maple_beta_prev, maple_ar_prev))
+row.names(metrics) = c("BARMA", "KARMA")
+
+metrics |> fastrep::tbl("Medidas nos Período de Previsão")
+
+
+
 
 
 ```
