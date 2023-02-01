@@ -1,5 +1,5 @@
 ---
-title: "title"
+title: "As Avaliações do Spotify Ao Longo do Tempo"
 author: "Alisson Rosa"
 abstract: "abstract"
 header-includes:
@@ -26,7 +26,7 @@ link-citations: true
 
 ```{r setup,include=F}
 
-options(digits = 3) # Arrendodamento
+options(digits = 4) # Arrendodamento
 options(scipen = 999)
 ggplot2::theme_set(ggplot2::theme_minimal())
 knitr::opts_chunk$set(
@@ -51,14 +51,16 @@ library(patchwork)
 
 
 
-eqm = function(model, serie = y){
-  resid = serie[2:length(serie)] - model$fitted[2:length(serie)]
+eqm = function(model, serie = y, ar=2){
+  ar = ar + 1
+  resid = serie[ar:length(serie)] - model$fitted[ar:length(serie)]
   return(sum(resid^2) / (length(resid) - 1))
   
 }
 
-mape = function(model,  serie = y){
-  resid = serie[2:length(serie)] - model$fitted[2:length(serie)]
+mape = function(model,  serie = y, ar = 2){
+  ar = ar + 1
+  resid = serie[ar:length(serie)] - model$fitted[ar:length(serie)]
   return((1/length(serie)) * sum(abs(resid)/abs(y[2:length(y)])))
 }
 
@@ -75,18 +77,57 @@ df = df |> group_by(
   Time_submitted) |>
   summarise(rate = mean(Rating))
 
+df = df[1:(nrow(df)-4), ]
+
 df = df |>  bind_cols(index = 1:nrow(df))
 y = df$rate /  5
 y <- ts(y, start = decimal_date(as.Date("2022-01-01")), frequency = 365)
 ```
 
-You cross-reference tables like this: Table \@ref(tab:crftable)
+
+
+
+
+\section{Análise Descritiva}
+Devemos iniciar avaliando o comportamento da série ao longo do tempo, para averiguar a existência de evidências de não estacionariedade ou sazonalidade, tal fato pode ser visto pela Figura \@ref(fig:serie).
+
+```{r serie, fig.cap="Comportament Médio dos Reviews ao Longo do Tempo"}
+plot_serie = df |>
+  ggplot(aes(x = Time_submitted, y = rate)) +
+  geom_line()
+
+plot_serie
+
+```
+```{r}
+pvalor = tseries::adf.test(y)$p.value
+```
+
+Nota-se que a série tem alguns picos de avaliações médias baixas, porém tende a variar em torno de uma média, pode ser visto também a não existência de sazonalidade. Além da análise visual faz-se necessário a utilização de teste de hipóteses para averiguar os fatos constatados anteriormente, dessa forma, antes da escolha do modelo realizou-se o teste de raiz unitária de Dickey-Fuller Aumentado (ADF). Sendo obtido um de p-valor= 0.05, ao nível de significância de  5%, a hipótese  de não  estacionariedade  é rejeitada. Assumindo que a série estacionária procedeu-se a utilização dos modelos descritos na seguinte seção. 
+
+A Figura fornece a função de autocorrelação e autocorrelação parcial
+```{r}
+ggAcf(df$rate) + ggPacf(df$rate) 
+
+```
+
+`
+Pode-se notar por inspeção visual da figura, que não existem evidências da série não ser estacionária, assim como visto pelo teste ADF e pela \@ref(fig:serie).
+
+
+
+
+```{r}
+y |> tibble() |>  fastrep::describe() |> fastrep::tbl("Resumo da Avaliação Média")
+```
+
+
 
 \section{Metodologia}
 Nessa seção são apresentados os modelos aqui utilizados, a saber: $\beta$ARMA, KARMA e ARIMA^[ARIMA: O modelo ARIMA já é bastante conhecido na literatura, portanto aqui é dispensado a sua introdução]
 
 \subsection{Modelo $\beta$ARMA}
-A distribuição beta é bastante conhecida pois consegue modelar variáveis aleatórias definidas em intervalos limitados, dessa maneira um caso particular importante é quando o intervalo é unitário iniciando em zero. Dessa maneira foi desenvolvido em @betarma o modelo com abordagem temporal para variáveis que podem ser modeladas pela distribuição beta.
+A distribuição beta é bastante conhecida pois consegue modelar variáveis aleatórias definidas em intervalos limitados, dessa maneira um caso particular importante é quando o intervalo é unitário iniciando em zero. Dessa maneira, foi desenvolvido em @betarma o modelo com abordagem temporal para variáveis que podem ser modeladas pela distribuição beta.
 
 Portanto, assumindo que a variável resposta está definida no intervalo $(0,1)$ o modelo assume que a cada variável $Y_t$ pode ser escrita da seguinte maneira:
 
@@ -103,37 +144,7 @@ g(\mu_t)=\alpha+x_t^{T}\beta+\sum_{i=1}^{p}\varphi_i[g(y_{t-i})-x_{t-1}^{T}\beta
 \end{align}
 
 
-\section{Análise Descritiva}
 
-```{r, fig.cap="Comportament Médio dos Reviews ao Longo do Tempo"}
-plot_serie = df |>
-  ggplot(aes(x = Time_submitted, y = rate)) +
-  geom_line()
-
-plot_serie
-
-```
-```{r}
-pvalor = tseries::adf.test(y)$p.value
-```
-
-
-
-Para a modelagem deve-se verificar se a suposição de estacionariedade  é satisfeita, dessa forma, antes da escolha do modelo realizou-se o teste de raiz unitária de Dickey-Fuller Aumentado (ADF) (Said e Dickey, 1984). Sendo obtido p-valor= 0.06, ao nível de significância de  5%, a hipótese  de não  estacionariedade  é rejeitada. Assumindo que a série estacionária procedeu-se a utilização dos modelos descritos na seguinte seção. 
-
-A Figura fornece a função de autocorrelação e autocorrelação 
-```{r}
-ggAcf(df$rate) + ggPacf(df$rate) 
-
-```
-
-`
-Pode-se notar que por inspeção visual da figura, conclui-se que não existem evidências da série não ser estacionária, assim como visto pelo teste ADF.
-
-
-```{r}
-y |> tibble() |>  fastrep::describe() |> fastrep::tbl("Resumo da Avaliação Média")
-```
 
 
 \section{Ajuste dos Modelos}
@@ -142,7 +153,7 @@ y |> tibble() |>  fastrep::describe() |> fastrep::tbl("Resumo da Avaliação Mé
 Na Tabela 2 são apresentadas as estimativas, o erro padrão e o p-valor associado ao teste de
 significância dos parâmetros do modelo $\beta$ARMA(1,1), obtido pelo menor AIC. Verifica-se que os parâmetro são significativos ao nível de significância de 5%
 ```{r}
-fit_barma = barma(y, ar=c(1), ma=c(1), h=15, diag=0)
+fit_barma = barma(y, ar=c(1,3,4,5), ma=c(1,2,3), h=13, diag=0)
 
 fit_barma$model |> as.data.frame() |> mutate(`Pr(>|z|)` = format.pval(`Pr(>|z|)`, eps = 0.001)) |>  fastrep::tbl("Resumo do Ajuste BARMA")
 ```
@@ -172,7 +183,7 @@ A tabela fornece as estimativas que foram apresentadas para o modelo $\beta$ARMA
 
 
 ```{r}
-fit_karma = karma(y, ar=c(1), h=15, diag=0)
+fit_karma = karma(y, ar=c(1), h=13, diag=0)
 
 fit_karma$model |> as.data.frame() |> mutate(`Pr(>|z|)` = format.pval(`Pr(>|z|)`, eps = 0.001)) |>  fastrep::tbl("Resumo do Ajuste KARMA")
 ```
@@ -197,18 +208,18 @@ Considerando as Figuras, pode-se observar que em apenas uma defasagem o
 valor é superior ao intervalo de confiança, dessa forma, aparentemente a suposição de resíduos não correlacionados  é satisfeita, ainda baseado no teste de Ljung-Box, testou-se correlação nula até a defasagem 120, tem-se p-valor=0.3568, logo os resíduos são não correlacionados. A Figura também apresenta os resíduos padronizados ao longo dos indíces, observa-se que apresentam um comportamento aleatório em torno de zero, com os valores dentro dos limites estipulados. Para o gráfico Q-Q plot, verifica-se que a maioria dos pontos se encontra sobre a linha diagonal, indicando a proximidade dos resíduos da distribuição Normal.
 
 
-```{r, fig.cap="Comportamento dos Resíduos para o Modelo Barma"}
+```{r, fig.cap="Comportamento dos Resíduos para o Modelo Barma", fig.height = 4.7}
 par(mfrow = c(2, 2)) 
 
 res=fit_barma$resid1
 resi_padrao=as.vector((res)/(sd(res)))
-acf(res)
-pacf(res)
+acf(res, cex.lab=0.8, cex.main=0.3, cex.axis=0.7, main="")
+pacf(res, cex.lab=0.8, cex.main=0.3, cex.axis=0.7, main="")
 
 n<-length(res)
 t<-seq(-5,n+6,by=1)
 
-plot(res, main=" ",xlab="Índices",ylab="Resíduos", pch = "+",ylim=c(-4,4))
+plot(res, main=" ",xlab="Índices",ylab="Resíduos", pch = "+",ylim=c(-4,4), cex.lab=0.8, cex.main=0.3, cex.axis=0.7)
 lines(t,rep(-3,n+12),lty=2,col=1)
 lines(t,rep(3,n+12),lty=2,col=1)
 lines(t,rep(-2,n+12),lty=3,col=1)
@@ -222,24 +233,24 @@ min_r<- min(res,na.rm=T)
 qqnorm(resi_padrao, pch = "+",
        xlim=c(0.95*min_r,max_r*1.05),
        ylim=c(0.95*min_r,max_r*1.05),
-       main="",xlab="quantis normais",ylab="quantis empiricos")
+       main="",xlab="quantis normais",ylab="quantis empiricos", cex.lab=0.8, cex.main=0.3, cex.axis=0.7)
 lines(c(-10,10),c(-10,10),lty=2)
 ```
 
 Pela Figura, temos os mesmos gráficos porém para o modelo KARMA
 
-```{r, fig.cap="Comportamento dos Resíduos para o Modelo KARMA"}
+```{r, fig.cap="Comportamento dos Resíduos para o Modelo KARMA", fig.height = 4.7}
 par(mfrow = c(2, 2)) 
 
 res=fit_karma$resid1
 resi_padrao=as.vector((res)/(sd(res)))
-acf(res)
-pacf(res)
+acf(res, cex.lab=0.8, cex.main=0.3, cex.axis=0.7, main="")
+pacf(res, cex.lab=0.8, cex.main=0.3, cex.axis=0.7, main="")
 
 n<-length(res)
 t<-seq(-5,n+6,by=1)
 
-plot(res, main=" ",xlab="Índices",ylab="Resíduos", pch = "+",ylim=c(-4,4))
+plot(res, main=" ",xlab="Índices",ylab="Resíduos", pch = "+",ylim=c(-4,4), cex.lab=0.8, cex.main=0.3, cex.axis=0.7)
 lines(t,rep(-3,n+12),lty=2,col=1)
 lines(t,rep(3,n+12),lty=2,col=1)
 lines(t,rep(-2,n+12),lty=3,col=1)
@@ -253,54 +264,47 @@ min_r<- min(res,na.rm=T)
 qqnorm(resi_padrao, pch = "+",
        xlim=c(0.95*min_r,max_r*1.05),
        ylim=c(0.95*min_r,max_r*1.05),
-       main="",xlab="quantis normais",ylab="quantis empiricos")
+       main="", xlab="quantis normais", ylab="quantis empiricos", cex.lab=0.8, cex.main=0.3, cex.axis=0.7)
 lines(c(-10,10),c(-10,10),lty=2)
 ```
 
 
 
 A Figura apresenta os resíduos padronizados ao longo dos indíces, observa-se que apresentam um comportamento aleatório em torno de zero, com os valores dentro dos limites estipulados. A Figura apresenta o gráfico Q-Q plot, verifica-se que a maioria dos pontos se encontra sobre a linha diagonal, indicando a proximidade dos resíduos da distribuição Normal.
-```{r}
-fit_karma$resid3 |> acf()
-```
-
-```{r}
-resid_plot = function(model , type = 2){
-  type = as.character(type)
-  resid = paste("resid", type)
-  residuals = eval(parse(text = model$resid))
-  residuals
-  
-}
 
 
-```
+
 \subsection{Comparação dos Modelos}
 
 Para comparar os modelos vamos utilizar de duas medidas que avaliam a diferença entre os valores reais $y$ e os valores preditos pelo modelo $\hat{\mu}$ , sendo elas o erro quadrático médio (EQM) e o erro percentual absoluto médio (MAPE), sendo definidas:
 
 \begin{align}
-\text{EQM} = \dfrac{1}{h}\sum_{i=1}^{h}(y_i - \hat{\mu}_i)^2 \quad \text{MAPE} =  \dfrac{1}{h}\sum_{i=1}^{h}\dfrac{|y_i - \hat{\mu}_i|}{|y_i|}
+\text{EQM} = \dfrac{1}{h}\sum_{i=1}^{h}(y_i - \hat{\mu}_i)^2 \quad; \text{MAPE} =  \dfrac{1}{h}\sum_{i=1}^{h}\dfrac{|y_i - \hat{\mu}_i|}{|y_i|}
 \end{align}
+Pela tabela \@ref(tab:train) notamos o que era esperado pela análise de diagnóstico, o modelo KARMA tende a ter um desempenho inferior aos demais, e por uma leve diferença o modelo $\beta$ARMA tende a ser o melhor nos dados de treino/ajuste.
 
-```{r}
+```{r train}
 modelo=auto.arima(y, max.p=5, max.q=5, max.P=5, max.Q=5, max.order=5, max.d=2, max.D=1,
                   start.p=1, start.q=1, start.P=1, start.Q=1, stationary=F)
-metrics = data.frame(EQM = c(eqm(fit_barma), eqm(fit_karma), eqm(modelo)),
-           MAPE = c(mape(fit_barma), mape(fit_karma), mape(modelo)))
+metrics = data.frame(EQM = c(eqm(fit_barma, ar = 5), eqm(fit_karma), eqm(modelo)),
+           MAPE = c(mape(fit_barma, ar = 5), mape(fit_karma), mape(modelo)))
 row.names(metrics) = c("BARMA", "KARMA", "ARIMA")
 
 metrics |> fastrep::tbl("Medidas nos Período de Ajuste")
 
-```
 
-```{r}
+```
+Entretanto os resultados são diferente para o caso dos dados de teste/previsão.
+    pois o que se nota pela Tabela \@ref(tab:test) é que o modelo $\beta$ARMA tende a ter um desempenho inferior em ambas as métricas. Uma situação que evidência que alinhamento de pressupostos nem sempre acarreta em melhores previsões.
+```{r test}
 
 karma_pred = fit_karma$forecast
 
 barma_pred = fit_barma$forecast
 
-test = y[(length(y) - 14):length(y)]
+
+test = y[(length(y) - 12):length(y)]
+
 
 
 
@@ -335,9 +339,18 @@ metrics |> fastrep::tbl("Medidas nos Período de Previsão")
 ```
 
 
+```{r, fig.height = 4.5, fig.width = 6.9}
 
-```{r crfgraph, fig.cap = "fig name"}
-plot(rnorm(500))
+
+plot(test, col=1, type="l", axes = T, main="", xlab="Indíce", ylab="Review Média")
+lines((barma_pred), lty = 1, lwd = 1, col=2)
+lines((karma_pred), lty = 2, lwd = 2, col=2)
+legend("topright",c("Valores reais","Valores ajustados - BARMA","Valores ajustados - KARMA"),#pch=vpch,
+       pt.bg="white", lty=c(1,1),  col=c(1,2), bty="n" )
+axis(1)
+axis(2)
+
+
 ```
 
 
@@ -345,10 +358,10 @@ plot(rnorm(500))
 
 \section{Conclusão}
 
-You cross-reference figures like this: Figure \@ref(fig:crfgraph)
 
 
-# Bibliography
+
+# Bibliografia
 
 
 
