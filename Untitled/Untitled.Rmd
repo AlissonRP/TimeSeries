@@ -105,14 +105,11 @@ pvalor = tseries::adf.test(y)$p.value
 
 Nota-se que a série tem alguns picos de avaliações médias baixas, porém tende a variar em torno de uma média, pode ser visto também a não existência de sazonalidade. Além da análise visual faz-se necessário a utilização de teste de hipóteses para averiguar os fatos constatados anteriormente, dessa forma, antes da escolha do modelo realizou-se o teste de raiz unitária de Dickey-Fuller Aumentado (ADF). Sendo obtido um de p-valor= 0.05, ao nível de significância de  5%, a hipótese  de não  estacionariedade  é rejeitada. Assumindo que a série estacionária procedeu-se a utilização dos modelos descritos na seguinte seção. 
 
-A Figura fornece a função de autocorrelação e autocorrelação parcial
-```{r}
-ggAcf(df$rate) + ggPacf(df$rate) 
+A Figura \@ref(fig:pacf) fornece a função de autocorrelação e autocorrelação parcial, Pode-se notar por inspeção visual da figura, que não existem evidências da série não ser estacionária, assim como visto pelo teste ADF e pela \@ref(fig:serie).
+```{r pacf}
+ggAcf(df$rate) + labs(title="Review Médio") + ggPacf(df$rate) + labs(title="Review Médio")
 
 ```
-
-`
-Pode-se notar por inspeção visual da figura, que não existem evidências da série não ser estacionária, assim como visto pelo teste ADF e pela \@ref(fig:serie).
 
 
 
@@ -151,7 +148,7 @@ g(\mu_t)=\alpha+x_t^{T}\beta+\sum_{i=1}^{p}\varphi_i[g(y_{t-i})-x_{t-1}^{T}\beta
 
 
 Na Tabela 2 são apresentadas as estimativas, o erro padrão e o p-valor associado ao teste de
-significância dos parâmetros do modelo $\beta$ARMA(1,1), obtido pelo menor AIC. Verifica-se que os parâmetro são significativos ao nível de significância de 5%
+significância dos parâmetros do modelo $\beta$ARMA(4,3), obtido pelo menor AIC. Verifica-se que os parâmetro são significativos ao nível de significância de 5%
 ```{r}
 fit_barma = barma(y, ar=c(1,3,4,5), ma=c(1,2,3), h=13, diag=0)
 
@@ -204,11 +201,11 @@ realizada a análise de diagnóstico na seguinte seção.
 
 
 
-Considerando as Figuras, pode-se observar que em apenas uma defasagem o
-valor é superior ao intervalo de confiança, dessa forma, aparentemente a suposição de resíduos não correlacionados  é satisfeita, ainda baseado no teste de Ljung-Box, testou-se correlação nula até a defasagem 120, tem-se p-valor=0.3568, logo os resíduos são não correlacionados. A Figura também apresenta os resíduos padronizados ao longo dos indíces, observa-se que apresentam um comportamento aleatório em torno de zero, com os valores dentro dos limites estipulados. Para o gráfico Q-Q plot, verifica-se que a maioria dos pontos se encontra sobre a linha diagonal, indicando a proximidade dos resíduos da distribuição Normal.
+Considerando as Figura \@ref(fig:residuals) que fornece os gráficos para diagnóstico do modelo $\beta$ARMA, pode-se observar que em apenas uma defasagem o
+valor é superior ao intervalo de confiança, dessa forma, aparentemente a suposição de resíduos não correlacionados  é satisfeita, ainda baseado no teste de Ljung-Box, testou-se correlação nula até a defasagem 20, tem-se p-valor=0.3568, logo os resíduos são não correlacionados. A Figura também apresenta os resíduos padronizados ao longo dos indíces, observa-se que apresentam um comportamento aleatório em torno de zero, com os valores dentro dos limites estipulados. Para o gráfico Q-Q plot, verifica-se que a maioria dos pontos se encontra sobre a linha diagonal, indicando a proximidade dos resíduos da distribuição Normal.
 
 
-```{r, fig.cap="Comportamento dos Resíduos para o Modelo Barma", fig.height = 4.7}
+```{r residuals, fig.cap="Comportamento dos Resíduos para o Modelo Barma", fig.height = 4.7}
 par(mfrow = c(2, 2)) 
 
 res=fit_barma$resid1
@@ -237,9 +234,9 @@ qqnorm(resi_padrao, pch = "+",
 lines(c(-10,10),c(-10,10),lty=2)
 ```
 
-Pela Figura, temos os mesmos gráficos porém para o modelo KARMA
+Pela Figura \@ref(fig:resikarma), temos os mesmos gráficos porém para o modelo KARMA, nesse caso nenhum dos pressupostos é satisfeitos, dado que temos inúmeras autocorrelações superiores aos intervalos de confiança, indicando autocorrelação nos resíduos. Os resíduos versus índices indica um padrão e também os resíduos estão bastantes "distantes" da distribuição normal.
 
-```{r, fig.cap="Comportamento dos Resíduos para o Modelo KARMA", fig.height = 4.7}
+```{r resikarma, fig.cap="Comportamento dos Resíduos para o Modelo KARMA", fig.height = 4.7}
 par(mfrow = c(2, 2)) 
 
 res=fit_karma$resid1
@@ -339,14 +336,14 @@ metrics |> fastrep::tbl("Medidas nos Período de Previsão")
 ```
 
 
-```{r, fig.height = 4.5, fig.width = 6.9}
+```{r, fig.height = 4.5, fig.width = 6.9, fig.cap="Dados Reais e Ajustados pelo Modelo"}
 
 
 plot(test, col=1, type="l", axes = T, main="", xlab="Indíce", ylab="Review Média")
 lines((barma_pred), lty = 1, lwd = 1, col=2)
 lines((karma_pred), lty = 2, lwd = 2, col=2)
 legend("topright",c("Valores reais","Valores ajustados - BARMA","Valores ajustados - KARMA"),#pch=vpch,
-       pt.bg="white", lty=c(1,1),  col=c(1,2), bty="n" )
+       pt.bg="white", lty=c(1,1),  col=c(1,2), bty="n")
 axis(1)
 axis(2)
 
@@ -357,6 +354,8 @@ axis(2)
 
 
 \section{Conclusão}
+
+Contemplamos o comportamento dos reviews médio diário do Spotify na *Play Store*, nota-se que não existem evidências de não estacionaridade e nem para a existência de sazonalidade. Para os modelos ajustados, o modelo KARMA não teve um desempenho agradável para os pressupostos, dado o comportamento dos resíduos, o modelo $\beta$ARMA foi o que obteve destaque, tanto em termos de pressupostos quanto em perfomance nos dados de treino, entretanto para os dados de teste sofreu a perda em termos da métrica para o KARMA.
 
 
 
