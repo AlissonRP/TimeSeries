@@ -1,0 +1,344 @@
+---
+title: "Reviews do Spotify"
+subtitle: "Uma Abordagem Temporal"
+title-slide-attributes:
+  data-background-image: "imgs/sptfy_back.jpg"
+  data-background-opacity: "0.4"
+author: "<br> Alisson Rosa"
+format: 
+    revealjs:
+        theme: [serif, custom.scss]
+        preview-links: auto
+        chalkboard: true
+        transition: fade
+        controls: true
+lang: pt
+---
+
+## Introduzindo o Spotify?  {background-image="imgs/sptfy_back.jpg" background-opacity=0.1}
+
+::: {.incremental}
+- Músicas, Podcasts etc
+
+<br />
+
+- *Review* em texto e *Review* numérico (estrelas)
+
+<br />
+
+- Utilizar modelo de séries temporais
+
+<br />
+
+:::
+
+
+
+```{r setup,include=F}
+
+options(digits = 4) # Arrendodamento
+options(scipen = 999)
+ggplot2::theme_set(ggplot2::theme_minimal())
+
+scale_fill_discrete <- \(...) ggplot2::scale_fill_brewer(..., palette = "Set2")
+```
+
+```{r }
+# R code
+library(tidyverse)
+library(forecast)
+library(lubridate)
+library(patchwork)
+
+
+
+
+eqm <- function(model, serie = y, ar = 2) {
+  ar <- ar + 1
+  resid <- serie[ar:length(serie)] - model$fitted[ar:length(serie)]
+  return(sum(resid^2) / (length(resid) - 1))
+}
+
+mape <- function(model, serie = y, ar = 2) {
+  ar <- ar + 1
+  resid <- serie[ar:length(serie)] - model$fitted[ar:length(serie)]
+  return((1 / length(serie)) * sum(abs(resid) / abs(y[ar:length(y)])))
+}
+
+source("analise_barmax/barma.r")
+source("KARMA_BARMA/karma.r")
+
+df <- read_csv("../data/rates.csv")
+
+df <- df |>
+  mutate(Time_submitted = as.Date(Time_submitted, format = "%Y-%m-%d"))
+
+data = df
+
+df <- df[1:(nrow(df) - 4), ]
+
+df <- df |>
+  group_by(
+    Time_submitted
+  ) |>
+  summarise(rate = mean(Rating))
+
+
+
+df <- df |> bind_cols(index = 1:nrow(df))
+y <- df$rate / 5
+y <- ts(y, start = decimal_date(as.Date("2022-01-01")), frequency = 365)
+```
+
+
+
+## DataSet {background-image="imgs/sptfy_back.jpg" background-opacity=0.1}
+
+```{r}
+data |> head(3) 
+```
+
+
+
+## DataSet {background-image="imgs/sptfy_back.jpg" background-opacity=0.1}
+
+```{r}
+df |> head(7) |> fastrep::tbl()
+```
+
+
+
+
+
+## Análise Básica {background-image="imgs/sptfy_back.jpg" background-opacity=0.02}
+
+```{r}
+df |>
+  ggplot(aes(x = Time_submitted, y = rate)) +
+  geom_line()
+```
+
+
+## Análise Básica {background-image="imgs/sptfy_back.jpg" background-opacity=0.06}
+
+```{r pacf}
+ggAcf(df$rate) + labs(title = "Review Médio") + ggPacf(df$rate) + labs(title = "Review Médio")
+```
+
+
+
+## Análise Básica {background-image="imgs/sptfy_back.jpg" background-opacity=0.05}
+
+```{r desc}
+y |>
+  tibble() |>
+  fastrep::describe() |>
+  fastrep::tbl("Resumo da Avaliação Média")
+```
+
+
+
+
+## Modelos {background-image="imgs/sptfy_back.jpg" background-opacity=0.05}
+
+```{r}
+fit_barma <- barma(y, ar = c(1, 3, 4, 5), ma = c(1, 2, 3), h = 13, diag = 0)
+
+fit_barma$model |>
+  as.data.frame() |>
+  mutate(`Pr(>|z|)` = format.pval(`Pr(>|z|)`, eps = 0.001)) 
+```
+## Modelos {background-image="imgs/sptfy_back.jpg" background-opacity=0.05}
+
+```{r realbarma, fig.cap="Valores Reais versus Ajustados pelo Modelo Barma"}
+
+real_hat <- function(fitted) {
+  fitted |>
+    tibble() |>
+    rename(y_hat = fitted) |>
+    bind_cols(y = df$rate / 5, data = df$Time_submitted) |>
+    ggplot() +
+    geom_line(aes(data, y_hat, color = "Estimada")) +
+    geom_line(aes(data, y, color = "Real")) +
+    scale_color_manual(name = "Serie", values = c("Estimada" = "red", "Real" = "black"))
+}
+
+
+
+real_hat(fit_barma$fitted)
+```
+
+
+
+## Modelos {background-image="imgs/sptfy_back.jpg" background-opacity=0.06}
+
+
+```{r tabkarma,}
+fit_karma <- karma(y, ar = c(1), h = 13, diag = 0)
+
+fit_karma$model |>
+  as.data.frame() |>
+  mutate(`Pr(>|z|)` = format.pval(`Pr(>|z|)`, eps = 0.001)) 
+```
+
+## Modelos {background-image="imgs/sptfy_back.jpg" background-opacity=0.06}
+
+```{r karmafitee, fig.cap="Valores Reais versus Ajustados pelo Modelo KARMA"}
+real_hat(fit_karma$fitted)
+```
+
+
+
+## Análise de Diagnótisco - BARMA
+
+```{r}
+par(mfrow = c(1, 2))
+res <- fit_barma$resid1
+resi_padrao <- as.vector((res) / (sd(res)))
+acf(res, cex.lab = 0.8, cex.main = 0.3, cex.axis = 0.7, main = "")
+pacf(res, cex.lab = 0.8, cex.main = 0.3, cex.axis = 0.7, main = "")
+
+```
+
+## Análise de Diagnótisco - BARMA
+
+```{r}
+par(mfrow = c(1, 2))
+
+n <- length(res)
+t <- seq(-5, n + 6, by = 1)
+
+plot(res, main = " ", xlab = "Índices", ylab = "Resíduos", pch = "+", ylim = c(-4, 4), cex.lab = 0.8, cex.main = 0.3, cex.axis = 0.7)
+lines(t, rep(-3, n + 12), lty = 2, col = 1)
+lines(t, rep(3, n + 12), lty = 2, col = 1)
+lines(t, rep(-2, n + 12), lty = 3, col = 1)
+lines(t, rep(2, n + 12), lty = 3, col = 1)
+
+
+
+
+max_r <- max(res, na.rm = T)
+min_r <- min(res, na.rm = T)
+qqnorm(resi_padrao,
+  pch = "+",
+  xlim = c(0.95 * min_r, max_r * 1.05),
+  ylim = c(0.95 * min_r, max_r * 1.05),
+  main = "", xlab = "quantis normais", ylab = "quantis empiricos", cex.lab = 0.8, cex.main = 0.3, cex.axis = 0.7
+)
+lines(c(-10, 10), c(-10, 10), lty = 2)
+```
+
+
+
+
+
+## Análise de Diagnótisco - KARMA
+
+
+```{r}
+par(mfrow = c(1, 2))
+
+res <- fit_karma$resid1
+resi_padrao <- as.vector((res) / (sd(res)))
+acf(res, cex.lab = 0.8, cex.main = 0.3, cex.axis = 0.7, main = "")
+pacf(res, cex.lab = 0.8, cex.main = 0.3, cex.axis = 0.7, main = "")
+```
+
+## Análise de Diagnótisco - KARMA
+
+```{r}
+par(mfrow = c(1, 2))
+
+n <- length(res)
+t <- seq(-5, n + 6, by = 1)
+
+plot(res, main = " ", xlab = "Índices", ylab = "Resíduos", pch = "+", ylim = c(-4, 4), cex.lab = 0.8, cex.main = 0.3, cex.axis = 0.7)
+lines(t, rep(-3, n + 12), lty = 2, col = 1)
+lines(t, rep(3, n + 12), lty = 2, col = 1)
+lines(t, rep(-2, n + 12), lty = 3, col = 1)
+lines(t, rep(2, n + 12), lty = 3, col = 1)
+
+
+
+
+max_r <- max(res, na.rm = T)
+min_r <- min(res, na.rm = T)
+qqnorm(resi_padrao,
+  pch = "+",
+  xlim = c(0.95 * min_r, max_r * 1.05),
+  ylim = c(0.95 * min_r, max_r * 1.05),
+  main = "", xlab = "quantis normais", ylab = "quantis empiricos", cex.lab = 0.8, cex.main = 0.3, cex.axis = 0.7
+)
+lines(c(-10, 10), c(-10, 10), lty = 2)
+
+```
+
+
+## Comparação dos Modelos {background-image="imgs/sptfy_back.jpg" background-opacity=0.1}
+
+```{r train}
+
+metrics <- data.frame(
+  EQM = c(eqm(fit_barma, ar = 5), eqm(fit_karma)),
+  MAPE = c(mape(fit_barma, ar = 5), mape(fit_karma))
+)
+row.names(metrics) <- c("BARMA", "KARMA")
+
+metrics |> fastrep::tbl("Medidas nos Período de Ajuste")
+```
+
+## Comparação dos Modelos {background-image="imgs/sptfy_back.jpg" background-opacity=0.1}
+
+
+```{r test}
+
+karma_pred <- fit_karma$forecast
+
+barma_pred <- fit_barma$forecast
+
+
+test <- y[(length(y) - 12):length(y)]
+
+
+
+
+###################### EQM e MAPE período previsao #######################
+
+############### EQM #################
+residuos_beta_prev <- (test - barma_pred)
+# residuos_sarima_prev = (test-as.vector(modelo$))
+residuos_arma_prev <- (test - as.vector(karma_pred))
+
+eqm_beta_prev <- (sum(residuos_beta_prev^2)) / length(residuos_beta_prev)
+# (eqm_sarima_prev = (sum(residuos_sarima_prev^2))/length(residuos_sarima_prev))
+eqm_arma_prev <- (sum(residuos_arma_prev^2)) / length(residuos_arma_prev)
+
+############### MAPE #################
+
+maple_beta_prev <- sum(abs(residuos_beta_prev) / abs(test)) / length(residuos_beta_prev)
+# (maple_sarima_prev = sum( abs(residuos_sarima_prev)/abs(za) )/ length(residuos_sarima_prev))
+maple_ar_prev <- sum(abs(residuos_arma_prev) / abs(test)) / length(residuos_arma_prev)
+
+
+metrics <- data.frame(
+  EQM = c(eqm_beta_prev, eqm_arma_prev),
+  MAPE = c(maple_beta_prev, maple_ar_prev)
+)
+row.names(metrics) <- c("BARMA", "KARMA")
+
+metrics |> fastrep::tbl("Medidas nos Período de Previsão")
+```
+
+
+## Conclusão {background-image="imgs/sptfy_back.jpg" background-opacity=0.1}
+
+
+* KARMA não foi legal
+
+* $\beta$ARMA não foi muito diferente do KARMA
+
+* Ou Seja...
+
+
+
+
